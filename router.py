@@ -3,19 +3,20 @@ import queue
 import json
 import time
 import random
-from typing import List, Dict, Iterator, Union
+from typing import List, Dict, Iterator, Union, Optional
 import generating
-
 
 
 # Constant
 TOO_MANY_REQUESTS = "Too many requests"
 
 
-
 # BASE_URL để mặc định (None)
 BASE_URL = None
-BASE_MODEL = "gemini-2.0-flash"
+BASE_MODEL = "gemini-2.5-flash"
+RPM = 10
+MIN_SECOND_RETURN = 60 / RPM + 0.001
+
 def generate_message(system: str, prompt: str) -> List[Dict[str, str]]:
     return [
         {"role": "system", "content": system},
@@ -23,14 +24,9 @@ def generate_message(system: str, prompt: str) -> List[Dict[str, str]]:
     ]
 
 
-
 # Đọc API keys từ file
 with open("api-key.json", 'r') as f:
     API_KEYS_LIST = json.load(f)
-
-assert BASE_MODEL == "gemini-2.0-flash"
-RPM = 15
-MIN_SECOND_RETURN = 60 / RPM + 0.001
 
 API_KEYS_SESSION = [API_KEYS_LIST[i // RPM] for i in range(len(API_KEYS_LIST) * RPM)]
 random.shuffle(API_KEYS_SESSION)
@@ -45,7 +41,12 @@ for idx in range(len(API_KEYS_SESSION)):
 
 
 
-def handle_request(model: str, messages: List[Dict[str, str]], stream: bool = False) -> Union[str, Iterator[str]]:
+def handle_request(
+    model: str,
+    messages: List[Dict[str, str]],
+    image_bytes: Optional[bytes] = None,
+    stream: bool = False
+) -> Union[str, Iterator[str]]:
     assert model == BASE_MODEL
 
     # Đảm bảo messages là danh sách các dict có 'role' và 'content' dạng str
@@ -58,7 +59,7 @@ def handle_request(model: str, messages: List[Dict[str, str]], stream: bool = Fa
         if _available_keys_queue.empty(): return TOO_MANY_REQUESTS
         session_idx = _available_keys_queue.get()
 
-    return _call_api(session_idx, model, messages, stream)
+    return _call_api(session_idx, model, messages, image_bytes, stream)
 
 
 def _return_key_later(delay, session_idx):
@@ -66,14 +67,26 @@ def _return_key_later(delay, session_idx):
     with _available_keys_lock:
         _available_keys_queue.put(session_idx)
 
-def _call_api(session_idx: int, model: str, messages: List[Dict[str, str]], stream: bool) -> Union[str, Iterator[str]]:
+def _call_api(
+    session_idx: int,
+    model: str,
+    messages: List[Dict[str, str]],
+    image_bytes: Optional[bytes],
+    stream: bool
+) -> Union[str, Iterator[str]]:
     """
     Gửi request đến API key tại session_idx. Trả về queue sau tối thiểu MIN_SECOND_RETURN giây.
     """
     api_key = API_KEYS_SESSION[session_idx]
     start_time = time.time()
     if stream:
-        raw_response = generating.streaming(api_key, base_url=BASE_URL)
+        raw_response = generating.streaming(
+            api_key,
+            model,
+            messages,
+            image_bytes,
+            base_url=BASE_URL
+        )
         def generate_stream():
             try:
                 for chunk in raw_response:
@@ -86,7 +99,13 @@ def _call_api(session_idx: int, model: str, messages: List[Dict[str, str]], stre
         return generate_stream()
     else:
         try:
-            response = generating.non_streaming(api_key, base_url=BASE_URL)
+            response = generating.non_streaming(
+                api_key,
+                model,
+                messages,
+                image_bytes,
+                base_url=BASE_URL
+            )
             return response.choices[0].message.content
         finally:
             sleep_time = MIN_SECOND_RETURN - (time.time() - start_time)

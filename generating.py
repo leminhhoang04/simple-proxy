@@ -1,23 +1,33 @@
+import base64
 from openai import OpenAI
 import argparse
 import json
 from typing import List, Dict, Optional
 
 DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
-DEFAULT_MODEL = "gemini-2.0-flash"
-DEFAULT_MESSAGE = [
-    {"role": "system", "content": "Bạn là một trợ lý hữu ích."},
-    {"role": "user", "content": "Hãy giới thiệu bản thân"}
-]
 
 def non_streaming(
     api_key: str,
-    model: str = DEFAULT_MODEL,
-    messages: List[Dict[str, str]] = DEFAULT_MESSAGE,
-    base_url: Optional[str] = None,
+    model: str,
+    messages: List[Dict[str, str]],
+    image_bytes: Optional[bytes],
+    base_url: Optional[str],
 ):
     if base_url is None:
         base_url = DEFAULT_BASE_URL
+
+    if image_bytes is not None:
+        b64 = base64.b64encode(image_bytes).decode('utf-8')
+        data_uri = f"data:image/png;base64,{b64}"
+        # Giả sử bạn muốn gắn ảnh vào tin nhắn cuối cùng do user gửi:
+        last = messages[-1]
+        # Nếu message cuối vẫn chỉ là text, ta chuyển nó thành mảng [text, image]
+        last_content = last["content"]
+        # Tạo content mới
+        last["content"] = [
+            {"type": "text",      "text": last_content},
+            {"type": "image_url", "image_url": {"url": data_uri}}
+        ]
 
     client = OpenAI(api_key=api_key, base_url=base_url)
     response = client.chat.completions.create(
@@ -28,12 +38,26 @@ def non_streaming(
 
 def streaming(
     api_key: str,
-    model: str = DEFAULT_MODEL,
-    messages: List[Dict[str, str]] = DEFAULT_MESSAGE,
-    base_url: Optional[str] = None,
+    model: str,
+    messages: List[Dict[str, str]],
+    image_bytes: Optional[bytes],
+    base_url: Optional[str],
 ):
     if base_url is None:
         base_url = DEFAULT_BASE_URL
+
+    if image_bytes is not None:
+        b64 = base64.b64encode(image_bytes).decode('utf-8')
+        data_uri = f"data:image/png;base64,{b64}"
+        # Giả sử bạn muốn gắn ảnh vào tin nhắn cuối cùng do user gửi:
+        last = messages[-1]
+        # Nếu message cuối vẫn chỉ là text, ta chuyển nó thành mảng [text, image]
+        last_content = last["content"]
+        # Tạo content mới
+        last["content"] = [
+            {"type": "text",      "text": last_content},
+            {"type": "image_url", "image_url": {"url": data_uri}}
+        ]
 
     client = OpenAI(api_key=api_key, base_url=base_url)
     response = client.chat.completions.create(
