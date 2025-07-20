@@ -67,6 +67,7 @@ async def chat(
             stream=stream
         )
 
+        # Nếu là stream (generator), wrap vào StreamingResponse
         if hasattr(response, '__iter__') and not isinstance(response, str):
             return StreamingResponse(response, media_type="text/plain")
         return {"response": response}

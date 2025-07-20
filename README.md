@@ -16,7 +16,7 @@ To customize the model or related settings, update the relevant variables in bot
 uvicorn server:app --host 0.0.0.0 --port <PORT> [--reload]
 ```
 
-3. View FastAPI documents at docs: http://<YOUR_IP>:<PORT>/docs
+3. View FastAPI documents at docs: `http://<YOUR_IP>:<PORT>/docs`
 
 # Rate limits
 
